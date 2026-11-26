@@ -2,16 +2,11 @@
 import asyncio
 import os
 import logging
-from typing import Optional
 
 from dotenv import load_dotenv
-from aiogram import Bot, Dispatcher, F, types
+from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, CallbackQuery
-from aiogram.dispatcher import DEFAULT_RATE_LIMIT
-from aiogram.dispatcher.handler import CancelHandler, HandlerCallback
-from aiogram.dispatcher.middlewares import BaseMiddleware
-from aiogram.utils.deep_linking import create_startparam
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 
 from ai_engine import generate_answer
 from memory import init_db, clear_memory, get_user_settings, set_user_long_mode
@@ -28,7 +23,7 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-WELCOME_VIDEO = "PATH_TO_VIDEO_FILE"
+WELCOME_VIDEO = "welcome.mp4"
 
 
 @dp.message(CommandStart())
@@ -43,9 +38,10 @@ async def send_welcome(message: Message, reset: bool = False):
         "Привет, я Элиана.\n\n"
         "Рада нашей встрече. Мы можем поболтать о чём угодно — "
         "о магии, приключениях или просто о жизни.\n\n"
-        "Расскажи, что привело тебя в мою библиотеку?"
+        "💡 Подсказка: пиши мне как живому человеку.\n"
+        "📹 Вот небольшое видео от меня:"
     )
-
+    
     try:
         await message.answer_video(
             video=open(WELCOME_VIDEO, "rb"),
@@ -62,12 +58,12 @@ async def send_welcome(message: Message, reset: bool = False):
 @dp.message(Command("reset"))
 async def cmd_reset(message: Message):
     """Команда /reset с подтверждением."""
-    keyboard = types.InlineKeyboardMarkup()
+    keyboard = InlineKeyboardMarkup()
     keyboard.add(
-        types.InlineKeyboardButton(text="Давай", callback_data="reset_confirm"),
-        types.InlineKeyboardButton(text="Отмена", callback_data="reset_cancel")
+        InlineKeyboardButton(text="Давай", callback_data="reset_confirm"),
+        InlineKeyboardButton(text="Отмена", callback_data="reset_cancel")
     )
-
+    
     await message.answer(
         "Ты хочешь стереть нашу историю?",
         reply_markup=keyboard
@@ -80,8 +76,15 @@ async def reset_callback(query: CallbackQuery):
     if query.data == "reset_confirm":
         clear_memory(query.from_user.id)
         await query.message.delete()
-        await send_welcome(query.message, reset=True)
+        await query.message.answer(
+            "Привет, я Элиана.\n\n"
+            "Рада нашей встрече. Мы можем поболтать о чём угодно — "
+            "о магии, приключениях или просто о жизни.\n\n"
+            "💡 Подсказка: пиши мне как живому человеку.\n"
+            "📹 Вот небольшое видео от меня:"
+        )
     else:
+        await query.answer("Сброс отменён")
         await query.message.delete()
 
 
@@ -90,20 +93,20 @@ async def cmd_longer(message: Message):
     """Команда /longer для переключения длины ответов."""
     settings = get_user_settings(message.from_user.id)
     current_long_mode = settings.get("long_mode", False)
-
+    
     if current_long_mode:
         question = "Длина ответов уже увеличена. Ты хочешь уменьшить длину диалога?"
         new_mode = False
     else:
         question = "Ты хочешь увеличить длину диалога, так, как будто мы разговариваем неспеша?"
         new_mode = True
-
-    keyboard = types.InlineKeyboardMarkup()
+    
+    keyboard = InlineKeyboardMarkup()
     keyboard.add(
-        types.InlineKeyboardButton(text="Давай", callback_data=f"longer_{str(new_mode).lower()}"),
-        types.InlineKeyboardButton(text="Отмена", callback_data="longer_cancel")
+        InlineKeyboardButton(text="Давай", callback_data=f"longer_{str(new_mode).lower()}"),
+        InlineKeyboardButton(text="Отмена", callback_data="longer_cancel")
     )
-
+    
     await message.answer(question, reply_markup=keyboard)
 
 
@@ -111,14 +114,15 @@ async def cmd_longer(message: Message):
 async def longer_callback(query: CallbackQuery):
     """Обработка переключения длины ответов."""
     data = query.data.split("_")[1]
-
+    
     if data == "cancel":
+        await query.answer("Изменение отменено")
         await query.message.delete()
         return
-
+    
     new_mode = data == "true"
     set_user_long_mode(query.from_user.id, new_mode)
-
+    
     await query.message.delete()
     mode_text = "увеличена" if new_mode else "уменьшена"
     await query.message.answer(f"Длина ответов {mode_text}.")
@@ -129,21 +133,21 @@ async def handle_message(message: Message):
     """Обработка текстовых сообщений."""
     user_id = message.from_user.id
     user_text = message.text
-
+    
     if user_text.startswith("/"):
         return
-
+    
     await bot.send_chat_action(
         chat_id=message.chat.id,
         action="typing"
     )
-
+    
     try:
         answer = await generate_answer(user_id, user_text)
-
+        
         for i in range(0, len(answer), 4000):
             await message.answer(answer[i:i + 4000])
-
+            
     except Exception as e:
         logger.exception("Ошибка генерации")
         await message.answer(
