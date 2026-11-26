@@ -1,118 +1,86 @@
+# memory.py
 import sqlite3
-import re
 import os
+from typing import List, Dict, Tuple
 
-DATA_DIR = os.getenv("DATA_DIR", ".")
-DB_NAME = os.path.join(DATA_DIR, "novel_memory.db")
-
+DATA_DIR = os.environ.get("DATA_DIR", "/var/data")
 
 
 def init_db():
-    with sqlite3.connect(DB_NAME) as db:
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                role TEXT NOT NULL,
-                content TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-
-def save_message(user_id, role, content):
-    with sqlite3.connect(DB_NAME) as db:
-        db.execute(
-            """
-            INSERT INTO messages (user_id, role, content)
-            VALUES (?, ?, ?)
-            """,
-            (user_id, role, content)
+    """Инициализация базы данных."""
+    os.makedirs(DATA_DIR, exist_ok=True)
+    conn = sqlite3.connect(f"{DATA_DIR}/memory.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY,
+            user_id INTEGER NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON messages(user_id)")
+    conn.commit()
+    conn.close()
 
 
-def get_context(user_id, current_message, limit=8):
-    with sqlite3.connect(DB_NAME) as db:
+def save_message(user_id: int, role: str, content: str) -> None:
+    """Сохранение сообщения в БД."""
+    conn = sqlite3.connect(f"{DATA_DIR}/memory.db")
+    conn.execute(
+        "INSERT INTO messages (user_id, role, content) VALUES (?, ?, ?)",
+        (user_id, role, content)
+    )
+    conn.commit()
+    conn.close()
 
-        # Получаем последние сообщения
-        recent = db.execute(
-            """
-            SELECT id, role, content
-            FROM messages
-            WHERE user_id = ?
-            ORDER BY id DESC
-            LIMIT ?
-            """,
-            (user_id, limit)
-        ).fetchall()
 
-        recent.reverse()
+def get_context(user_id: int, max_messages: int = 20) -> List[Dict[str, str]]:
+    """Получение истории диалога пользователя."""
+    conn = sqlite3.connect(f"{DATA_DIR}/memory.db")
+    cursor = conn.execute(
+        "SELECT role, content FROM messages WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",
+        (user_id, max_messages)
+    )
+    messages = cursor.fetchall()
+    conn.close()
 
-        if not recent:
-            return [], []
+    return [{"role": m[0], "content": m[1]} for m in reversed(messages)]
 
-        first_recent_id = recent[0][0]
 
-        # Ищем подходящие старые воспоминания
-        words = set(
-            re.findall(
-                r"[а-яёa-z0-9]{4,}",
-                current_message.lower()
-            )
+def clear_memory(user_id: int) -> None:
+    """Очистка истории пользователя."""
+    conn = sqlite3.connect(f"{DATA_DIR}/memory.db")
+    conn.execute("DELETE FROM messages WHERE user_id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+
+
+def get_user_settings(user_id: int) -> Dict:
+    """Получение настроек пользователя."""
+    conn = sqlite3.connect(f"{DATA_DIR}/memory.db")
+    cursor = conn.execute(
+        "SELECT long_mode FROM user_settings WHERE user_id = ?",
+        (user_id,)
+    )
+    result = cursor.fetchone()
+    conn.close()
+
+    return {"long_mode": result[0] if result else False}
+
+
+def set_user_long_mode(user_id: int, long_mode: bool) -> None:
+    """Установка режима длины ответов."""
+    conn = sqlite3.connect(f"{DATA_DIR}/memory.db")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INTEGER PRIMARY KEY,
+            long_mode BOOLEAN DEFAULT FALSE
         )
-
-        stop_words = {
-            "когда", "почему", "который", "которая",
-            "помнишь", "можешь", "расскажи", "сделать",
-            "тогда", "теперь", "этого", "этот", "этим",
-            "твоего", "твоей", "меня", "тебя", "сейчас"
-        }
-
-        words -= stop_words
-
-        old_messages = db.execute(
-            """
-            SELECT role, content
-            FROM messages
-            WHERE user_id = ? AND id < ?
-            ORDER BY id DESC
-            LIMIT 5000
-            """,
-            (user_id, first_recent_id)
-        ).fetchall()
-
-        scored = []
-
-        for role, content in old_messages:
-            text = content.lower()
-
-            score = sum(
-                1 for word in words
-                if word in text
-            )
-
-            if score > 0:
-                scored.append((score, role, content))
-
-        # Выбираем наиболее подходящие воспоминания
-        scored.sort(key=lambda item: item[0], reverse=True)
-
-        memories = [
-            {"role": role, "content": content}
-            for score, role, content in scored[:3]
-        ]
-
-        history = [
-            {"role": role, "content": content}
-            for _, role, content in recent
-        ]
-
-        return memories, history
-
-
-def clear_memory(user_id):
-    with sqlite3.connect(DB_NAME) as db:
-        db.execute(
-            "DELETE FROM messages WHERE user_id = ?",
-            (user_id,)
-        )
+    """)
+    conn.execute(
+        "INSERT OR REPLACE INTO user_settings (user_id, long_mode) VALUES (?, ?)",
+        (user_id, long_mode)
+    )
+    conn.commit()
+    conn.close()
