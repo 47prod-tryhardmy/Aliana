@@ -29,7 +29,7 @@ dp = Dispatcher()
 async def start(message: Message):
 
     await message.answer(
-        "Привет! Я Элиана.\n\n"
+        "Привет! Я Алиана.\n\n"
         "Рада нашей встрече. "
         "О чём поговорим?"
     )
