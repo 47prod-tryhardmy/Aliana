@@ -83,10 +83,4 @@ async def generate_answer(user_id, user_message):
     # Сохраняем ответ персонажа
     save_message(user_id, "assistant", answer)
     
-    usage = response.usage
-    logging.info(
-        "tokens in=%s out=%s",
-        usage.prompt_tokens,
-        usage.completion_tokens,
-    )
     return answer
