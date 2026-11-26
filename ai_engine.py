@@ -9,10 +9,10 @@ from memory import get_context, save_message
 load_dotenv()
 
 client = AsyncOpenAI(
-    api_key=os.getenv("OPENAI_API_KEY")
+    api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com"
 )
 
-MODEL = os.getenv("OPENAI_MODEL", "gpt-5.5")
+MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
 
 # Загружаем личность персонажа
 with open("character.txt", "r", encoding="utf-8") as file:
@@ -78,7 +78,7 @@ async def generate_answer(user_id, user_message):
     answer = response.output_text
 
     if not answer:
-        answer = "Элиана задумалась, подбирая слова..."
+        answer = "Алиана задумалась, подбирая слова..."
 
     # Сохраняем ответ персонажа
     save_message(user_id, "assistant", answer)
