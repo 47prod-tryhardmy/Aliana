@@ -1,56 +1,137 @@
-
+# main.py
 import asyncio
 import os
 import logging
+from typing import Optional
 
 from dotenv import load_dotenv
-
-from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart, Command
-from aiogram.types import Message
-
+from aiogram import Bot, Dispatcher, F, types
+from aiogram.filters import Command, CommandStart
+from aiogram.types import Message, CallbackQuery
+from aiogram.dispatcher import DEFAULT_RATE_LIMIT
+from aiogram.dispatcher.handler import CancelHandler, HandlerCallback
+from aiogram.dispatcher.middlewares import BaseMiddleware
+from aiogram.utils.deep_linking import create_startparam
 
 from ai_engine import generate_answer
-from memory import init_db, clear_memory
+from memory import init_db, clear_memory, get_user_settings, set_user_long_mode
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    raise ValueError("Не найден BOT_TOKEN в файле .env")
-bot = Bot(token=BOT_TOKEN)
+    raise ValueError("BOT_TOKEN не найден в .env")
 
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
+
+WELCOME_VIDEO = "PATH_TO_VIDEO_FILE"
 
 
 @dp.message(CommandStart())
-async def start(message: Message):
+async def cmd_start(message: Message):
+    """Команда /start."""
+    await send_welcome(message)
 
-    await message.answer(
-        "Привет! Я Алиана.\n\n"
-        "Рада нашей встрече. "
-        "О чём поговорим?"
+
+async def send_welcome(message: Message, reset: bool = False):
+    """Отправка приветственного сообщения с видео."""
+    welcome_text = (
+        "Привет, я Элиана.\n\n"
+        "Рада нашей встрече. Мы можем поболтать о чём угодно — "
+        "о магии, приключениях или просто о жизни.\n\n"
+        "Расскажи, что привело тебя в мою библиотеку?"
     )
+
+    try:
+        await message.answer_video(
+            video=open(WELCOME_VIDEO, "rb"),
+            caption=welcome_text,
+            parse_mode="HTML"
+        )
+    except FileNotFoundError:
+        await message.answer(welcome_text)
+    except Exception as e:
+        logger.exception("Ошибка отправки видео")
+        await message.answer(welcome_text)
 
 
 @dp.message(Command("reset"))
-async def reset(message: Message):
-
-    clear_memory(message.from_user.id)
+async def cmd_reset(message: Message):
+    """Команда /reset с подтверждением."""
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(
+        types.InlineKeyboardButton(text="Давай", callback_data="reset_confirm"),
+        types.InlineKeyboardButton(text="Отмена", callback_data="reset_cancel")
+    )
 
     await message.answer(
-        "Мои воспоминания о нашем разговоре "
-        "начались заново."
+        "Ты хочешь стереть нашу историю?",
+        reply_markup=keyboard
     )
+
+
+@dp.callback_query(F.data.in_({"reset_confirm", "reset_cancel"}))
+async def reset_callback(query: CallbackQuery):
+    """Обработка подтверждения сброса."""
+    if query.data == "reset_confirm":
+        clear_memory(query.from_user.id)
+        await query.message.delete()
+        await send_welcome(query.message, reset=True)
+    else:
+        await query.message.delete()
+
+
+@dp.message(Command("longer"))
+async def cmd_longer(message: Message):
+    """Команда /longer для переключения длины ответов."""
+    settings = get_user_settings(message.from_user.id)
+    current_long_mode = settings.get("long_mode", False)
+
+    if current_long_mode:
+        question = "Длина ответов уже увеличена. Ты хочешь уменьшить длину диалога?"
+        new_mode = False
+    else:
+        question = "Ты хочешь увеличить длину диалога, так, как будто мы разговариваем неспеша?"
+        new_mode = True
+
+    keyboard = types.InlineKeyboardMarkup()
+    keyboard.add(
+        types.InlineKeyboardButton(text="Давай", callback_data=f"longer_{str(new_mode).lower()}"),
+        types.InlineKeyboardButton(text="Отмена", callback_data="longer_cancel")
+    )
+
+    await message.answer(question, reply_markup=keyboard)
+
+
+@dp.callback_query(F.data.startswith("longer_"))
+async def longer_callback(query: CallbackQuery):
+    """Обработка переключения длины ответов."""
+    data = query.data.split("_")[1]
+
+    if data == "cancel":
+        await query.message.delete()
+        return
+
+    new_mode = data == "true"
+    set_user_long_mode(query.from_user.id, new_mode)
+
+    await query.message.delete()
+    mode_text = "увеличена" if new_mode else "уменьшена"
+    await query.message.answer(f"Длина ответов {mode_text}.")
 
 
 @dp.message(F.text)
 async def handle_message(message: Message):
-
+    """Обработка текстовых сообщений."""
     user_id = message.from_user.id
     user_text = message.text
+
+    if user_text.startswith("/"):
+        return
 
     await bot.send_chat_action(
         chat_id=message.chat.id,
@@ -58,33 +139,22 @@ async def handle_message(message: Message):
     )
 
     try:
+        answer = await generate_answer(user_id, user_text)
 
-        answer = await generate_answer(
-            user_id,
-            user_text
-        )
-
-        # Telegram ограничивает длину одного сообщения
         for i in range(0, len(answer), 4000):
             await message.answer(answer[i:i + 4000])
 
-    except Exception as error:
-
-        logging.exception("Ошибка генерации")
-        await message.answer(f"DEBUG: {type(error).__name__}: {error}")
+    except Exception as e:
+        logger.exception("Ошибка генерации")
         await message.answer(
-            "Прости, сейчас мне не удалось "
-            "собраться с мыслями. Попробуй ещё раз."
+            "Прости, сейчас мне не удалось собраться с мыслями. Попробуй ещё раз."
         )
 
 
 async def main():
-    os.makedirs("/var/data", exist_ok=True)
-    os.environ.setdefault("DATA_DIR", "/var/data")
+    """Запуск бота."""
     init_db()
-
-    print("Fantasy Novel Bot запущен!")
-
+    logger.info("Fantasy Novel Bot запущен!")
     await dp.start_polling(bot)
 
 
