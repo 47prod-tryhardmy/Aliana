@@ -59,8 +59,8 @@ async def cmd_reset(message: Message):
     """Команда /reset с подтверждением."""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Давай", callback_data="reset_confirm"),
-            InlineKeyboardButton(text="Отмена", callback_data="reset_cancel")
+            InlineKeyboardButton(text="Давай🔄", callback_data="reset_confirm"),
+            InlineKeyboardButton(text="Отмена✖️", callback_data="reset_cancel")
         ]
     ])
     
@@ -97,16 +97,16 @@ async def cmd_longer(message: Message):
     current_long_mode = settings.get("long_mode", False)
     
     if current_long_mode:
-        question = "Я уже отвечаю тебе подробнее. \nТы хочешь уменьшить длину ответов?"
+        question = "Я уже отвечаю тебе подробнее.💬 \nТы хочешь уменьшить длину ответов?"
         new_mode = False
     else:
-        question = "Ты хочешь увеличить длину моих ответов, так, как будто мы разговариваем неспеша?"
+        question = "Ты хочешь увеличить длину моих ответов, так, как будто мы разговариваем неспеша?💬"
         new_mode = True
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="Давай", callback_data=f"longer_{str(new_mode).lower()}"),
-            InlineKeyboardButton(text="Отмена", callback_data="longer_cancel")
+            InlineKeyboardButton(text="Давай✔️", callback_data=f"longer_{str(new_mode).lower()}"),
+            InlineKeyboardButton(text="Отмена✖️", callback_data="longer_cancel")
         ]
     ])
     
