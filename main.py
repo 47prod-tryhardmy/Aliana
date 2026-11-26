@@ -38,7 +38,7 @@ async def send_welcome(message: Message):
         "Привет, я Элиана.\n\n"
         "Рада нашей встрече. Мы можем поболтать о чём угодно — "
         "о магии, приключениях или просто о жизни.\n\n"
-        "💡 Подсказка: пиши мне как живому человеку."
+        "Расскажи, что привело тебя в мою библиотеку?"
     )
     
     try:
@@ -65,7 +65,7 @@ async def cmd_reset(message: Message):
     ])
     
     await message.answer(
-        "Ты хочешь стереть нашу историю?",
+        "Ты хочешь начать нашу историю сначала? Я ведь все забуду.",
         reply_markup=keyboard
     )
 
@@ -82,7 +82,7 @@ async def reset_callback(query: CallbackQuery):
                 "Привет, я Элиана.\n\n"
                 "Рада нашей встрече. Мы можем поболтать о чём угодно — "
                 "о магии, приключениях или просто о жизни.\n\n"
-                "💡 Подсказка: пиши мне как живому человеку."
+                "Расскажи, что привело тебя в мою библиотеку?"
             )
         )
     else:
@@ -97,10 +97,10 @@ async def cmd_longer(message: Message):
     current_long_mode = settings.get("long_mode", False)
     
     if current_long_mode:
-        question = "Длина ответов уже увеличена. Ты хочешь уменьшить длину диалога?"
+        question = "Я уже отвечаю тебе подробнее. \nТы хочешь уменьшить длину ответов?"
         new_mode = False
     else:
-        question = "Ты хочешь увеличить длину диалога, так, как будто мы разговариваем неспеша?"
+        question = "Ты хочешь увеличить длину моих ответов, так, как будто мы разговариваем неспеша?"
         new_mode = True
     
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -130,7 +130,7 @@ async def longer_callback(query: CallbackQuery):
     mode_text = "увеличена" if new_mode else "уменьшена"
     await bot.send_message(
         chat_id=query.message.chat.id,
-        text=f"Длина ответов {mode_text}."
+        text=f"Длина моих ответов {mode_text}."
     )
 
 
