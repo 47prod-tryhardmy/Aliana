@@ -1,7 +1,7 @@
 # memory.py
 import sqlite3
 import os
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 DATA_DIR = os.environ.get("DATA_DIR", "/var/data")
 
