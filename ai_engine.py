@@ -72,7 +72,8 @@ async def generate_answer(user_id, user_message):
         model=MODEL,
         instructions=instructions,
         input=history,
-        store=False
+        store=False,
+        max_tokens=350
     )
 
     answer = response.output_text
