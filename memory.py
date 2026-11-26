@@ -31,7 +31,7 @@ def save_message(user_id, role, content):
         )
 
 
-def get_context(user_id, current_message, limit=20):
+def get_context(user_id, current_message, limit=8):
     with sqlite3.connect(DB_NAME) as db:
 
         # Получаем последние сообщения
@@ -99,7 +99,7 @@ def get_context(user_id, current_message, limit=20):
 
         memories = [
             {"role": role, "content": content}
-            for score, role, content in scored[:6]
+            for score, role, content in scored[:3]
         ]
 
         history = [
