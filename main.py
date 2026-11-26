@@ -32,24 +32,23 @@ async def cmd_start(message: Message):
     await send_welcome(message)
 
 
-async def send_welcome(message: Message, reset: bool = False):
-    """Отправка приветственного сообщения с видео."""
+async def send_welcome(message: Message):
+    """Отправка приветственного сообщения."""
     welcome_text = (
         "Привет, я Элиана.\n\n"
         "Рада нашей встрече. Мы можем поболтать о чём угодно — "
         "о магии, приключениях или просто о жизни.\n\n"
-        "💡 Подсказка: пиши мне как живому человеку.\n"
-        "📹 Вот небольшое видео от меня:"
+        "💡 Подсказка: пиши мне как живому человеку."
     )
     
     try:
-        await message.answer_video(
-            video=open(WELCOME_VIDEO, "rb"),
-            caption=welcome_text,
-            parse_mode="HTML"
-        )
-    except FileNotFoundError:
-        await message.answer(welcome_text)
+        if os.path.exists(WELCOME_VIDEO):
+            await message.answer_video(
+                video=open(WELCOME_VIDEO, "rb"),
+                caption=welcome_text,
+            )
+        else:
+            await message.answer(welcome_text)
     except Exception as e:
         logger.exception("Ошибка отправки видео")
         await message.answer(welcome_text)
@@ -59,7 +58,7 @@ async def send_welcome(message: Message, reset: bool = False):
 async def cmd_reset(message: Message):
     """Команда /reset с подтверждением."""
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(
+    keyboard.row(
         InlineKeyboardButton(text="Давай", callback_data="reset_confirm"),
         InlineKeyboardButton(text="Отмена", callback_data="reset_cancel")
     )
@@ -76,12 +75,14 @@ async def reset_callback(query: CallbackQuery):
     if query.data == "reset_confirm":
         clear_memory(query.from_user.id)
         await query.message.delete()
-        await query.message.answer(
-            "Привет, я Элиана.\n\n"
-            "Рада нашей встрече. Мы можем поболтать о чём угодно — "
-            "о магии, приключениях или просто о жизни.\n\n"
-            "💡 Подсказка: пиши мне как живому человеку.\n"
-            "📹 Вот небольшое видео от меня:"
+        await bot.send_message(
+            chat_id=query.message.chat.id,
+            text=(
+                "Привет, я Элиана.\n\n"
+                "Рада нашей встрече. Мы можем поболтать о чём угодно — "
+                "о магии, приключениях или просто о жизни.\n\n"
+                "💡 Подсказка: пиши мне как живому человеку."
+            )
         )
     else:
         await query.answer("Сброс отменён")
@@ -102,7 +103,7 @@ async def cmd_longer(message: Message):
         new_mode = True
     
     keyboard = InlineKeyboardMarkup()
-    keyboard.add(
+    keyboard.row(
         InlineKeyboardButton(text="Давай", callback_data=f"longer_{str(new_mode).lower()}"),
         InlineKeyboardButton(text="Отмена", callback_data="longer_cancel")
     )
@@ -125,17 +126,17 @@ async def longer_callback(query: CallbackQuery):
     
     await query.message.delete()
     mode_text = "увеличена" if new_mode else "уменьшена"
-    await query.message.answer(f"Длина ответов {mode_text}.")
+    await bot.send_message(
+        chat_id=query.message.chat.id,
+        text=f"Длина ответов {mode_text}."
+    )
 
 
-@dp.message(F.text)
+@dp.message(F.text & ~F.text.startswith("/"))
 async def handle_message(message: Message):
     """Обработка текстовых сообщений."""
     user_id = message.from_user.id
     user_text = message.text
-    
-    if user_text.startswith("/"):
-        return
     
     await bot.send_chat_action(
         chat_id=message.chat.id,
