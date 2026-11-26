@@ -73,7 +73,6 @@ async def generate_answer(user_id, user_message):
         instructions=instructions,
         input=history,
         store=False,
-        max_tokens=350
     )
 
     answer = response.output_text
