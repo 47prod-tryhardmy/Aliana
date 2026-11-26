@@ -71,7 +71,7 @@ async def handle_message(message: Message):
     except Exception as error:
 
         logging.exception("Ошибка генерации")
-
+        await message.answer(f"DEBUG: {type(error).__name__}: {error}")
         await message.answer(
             "Прости, сейчас мне не удалось "
             "собраться с мыслями. Попробуй ещё раз."
