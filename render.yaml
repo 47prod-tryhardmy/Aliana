@@ -8,10 +8,10 @@ services:
     envVars:
       - key: BOT_TOKEN
         sync: false
-      - key: OPENAI_API_KEY
+      - key: DEEPSEEK_API_KEY
         sync: false
-      - key: OPENAI_MODEL
-        value: gpt-4o-mini
+      - key: DEEPSEEK_MODEL
+        value: deepseek-flash
     disk:
       name: novel-data
       mountPath: /var/data
