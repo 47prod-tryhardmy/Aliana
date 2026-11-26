@@ -1,7 +1,7 @@
 # memory.py
 import sqlite3
 import os
-from typing import List, Dict, Tuple
+from typing import List, Dict, Optional
 
 DATA_DIR = os.environ.get("DATA_DIR", "/var/data")
 
@@ -20,6 +20,12 @@ def init_db():
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_user_id ON messages(user_id)")
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS user_settings (
+            user_id INTEGER PRIMARY KEY,
+            long_mode BOOLEAN DEFAULT 0
+        )
+    """)
     conn.commit()
     conn.close()
 
@@ -44,7 +50,7 @@ def get_context(user_id: int, max_messages: int = 20) -> List[Dict[str, str]]:
     )
     messages = cursor.fetchall()
     conn.close()
-
+    
     return [{"role": m[0], "content": m[1]} for m in reversed(messages)]
 
 
@@ -65,19 +71,13 @@ def get_user_settings(user_id: int) -> Dict:
     )
     result = cursor.fetchone()
     conn.close()
-
-    return {"long_mode": result[0] if result else False}
+    
+    return {"long_mode": bool(result[0]) if result else False}
 
 
 def set_user_long_mode(user_id: int, long_mode: bool) -> None:
     """Установка режима длины ответов."""
     conn = sqlite3.connect(f"{DATA_DIR}/memory.db")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS user_settings (
-            user_id INTEGER PRIMARY KEY,
-            long_mode BOOLEAN DEFAULT FALSE
-        )
-    """)
     conn.execute(
         "INSERT OR REPLACE INTO user_settings (user_id, long_mode) VALUES (?, ?)",
         (user_id, long_mode)
