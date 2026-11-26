@@ -1,86 +1,84 @@
-
+# ai_engine.py
 import os
 import logging
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 
-from memory import get_context, save_message
+from memory import save_message, get_context, get_user_settings
 
 load_dotenv()
 
+logger = logging.getLogger(__name__)
+
 client = AsyncOpenAI(
-    api_key=os.getenv("DEEPSEEK_API_KEY"), base_url="https://api.deepseek.com"
+    api_key=os.getenv("DEEPSEEK_API_KEY"),
+    max_retries=3
 )
 
 MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-flash")
 
-# Загружаем личность персонажа
-with open("character.txt", "r", encoding="utf-8") as file:
-    CHARACTER = file.read()
+
+def load_character() -> str:
+    """Загрузка описания персонажа."""
+    with open("character.txt", "r", encoding="utf-8") as f:
+        return f.read()
 
 
-async def generate_answer(user_id, user_message):
+CHARACTER = load_character()
 
-    # Сохраняем новое сообщение
+
+async def generate_answer(user_id: int, user_message: str) -> str:
+    """Генерация ответа Алианы с оптимизацией токенов."""
+
     save_message(user_id, "user", user_message)
 
-    # Извлекаем воспоминания и последние сообщения
-    memories, history = get_context(
-        user_id,
-        user_message
-    )
+    settings = get_user_settings(user_id)
+    long_mode = settings.get("long_mode", False)
 
-    # Формируем блок воспоминаний
-    memory_text = "\n".join(
-        [
-            f"{item['role']}: {item['content']}"
-            for item in memories
-        ]
-    )
+    history = get_context(user_id, max_messages=16 if long_mode else 10)
 
-    # Дополнительные инструкции
-    instructions = f"""
-{CHARACTER}
+    system_prompt = build_system_prompt(long_mode)
 
-ДОПОЛНИТЕЛЬНЫЕ ПРАВИЛА:
+    messages = [
+        {"role": "system", "content": system_prompt},
+        *history
+    ]
 
-Ты продолжаешь существующий диалог.
-Учитывай всю доступную информацию.
+    try:
+        response = await client.chat.completions.create(
+            model=MODEL,
+            messages=messages,
+            temperature=0.7,
+            max_tokens=500 if long_mode else 200
+        )
 
-Ниже представлены найденные фрагменты
-из предыдущих разговоров.
+        answer = response.choices[0].message.content.strip()
 
-Они являются архивными воспоминаниями,
-а не новыми сообщениями пользователя.
+    except Exception as e:
+        logger.exception("Ошибка генерации ответа")
+        answer = "Элиана задумалась, подбирая слова..."
 
-АРХИВ:
-{memory_text if memory_text else "Подходящие старые воспоминания не найдены."}
-
-ТВОЯ ЗАДАЧА:
-
-1. Внимательно учитывай предыдущие события.
-2. Не противоречь установленным фактам.
-3. Отвечай от лица своего персонажа.
-4. Органично развивай сюжет.
-5. Вплетай новые идеи в предложения пользователя.
-6. Сохраняй естественность диалога.
-7. Не раскрывай внутренние рассуждения.
-8. Не придумывай события, которых не было.
-"""
-
-    response = await client.responses.create(
-        model=MODEL,
-        instructions=instructions,
-        input=history,
-        store=False,
-    )
-
-    answer = response.output_text
-
-    if not answer:
-        answer = "Алиана задумалась, подбирая слова..."
-
-    # Сохраняем ответ персонажа
     save_message(user_id, "assistant", answer)
-    
     return answer
+
+
+def build_system_prompt(long_mode: bool) -> str:
+    """Сборка системного промпта с оптимизацией токенов."""
+
+    format_instruction = (
+        "ФОРМАТ ОТВЕТА:\n"
+        "- Одна строка описания действия\n"
+        "- Одна фраза Алианы\n\n"
+        "Пример:\n"
+        "Алиана улыбнулась, глядя на тебя.\n"
+        "\"Привет, как твои дела?\""
+    ) if not long_mode else "Отвечай развёрнуто, как в неспешной беседе."
+
+    return f"""{CHARACTER}
+
+{format_instruction}
+
+ПРАВИЛА:
+1. Не противоречь фактам из истории
+2. Сохраняй естественность диалога
+3. Не раскрывай внутренние рассуждения"""
