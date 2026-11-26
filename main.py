@@ -57,11 +57,12 @@ async def send_welcome(message: Message):
 @dp.message(Command("reset"))
 async def cmd_reset(message: Message):
     """Команда /reset с подтверждением."""
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(text="Давай", callback_data="reset_confirm"),
-        InlineKeyboardButton(text="Отмена", callback_data="reset_cancel")
-    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Давай", callback_data="reset_confirm"),
+            InlineKeyboardButton(text="Отмена", callback_data="reset_cancel")
+        ]
+    ])
     
     await message.answer(
         "Ты хочешь стереть нашу историю?",
@@ -102,11 +103,12 @@ async def cmd_longer(message: Message):
         question = "Ты хочешь увеличить длину диалога, так, как будто мы разговариваем неспеша?"
         new_mode = True
     
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
-        InlineKeyboardButton(text="Давай", callback_data=f"longer_{str(new_mode).lower()}"),
-        InlineKeyboardButton(text="Отмена", callback_data="longer_cancel")
-    )
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="Давай", callback_data=f"longer_{str(new_mode).lower()}"),
+            InlineKeyboardButton(text="Отмена", callback_data="longer_cancel")
+        ]
+    ])
     
     await message.answer(question, reply_markup=keyboard)
 
