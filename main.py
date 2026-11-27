@@ -23,7 +23,7 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-WELCOME_VIDEO = "welcome.mp4"
+WELCOME_VIDEO = os.getenv("welcome.mp4")
 
 
 @dp.message(CommandStart())
